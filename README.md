@@ -75,6 +75,9 @@ rate-limit usage is the largest tree, so each on its own gets you halfway.
 | Context | Last assistant message in the session transcript |
 | Usage | `rate_limits` on the statusline payload (5-hour, 7-day, per-model) |
 
+The percentage is the busiest window; the countdown is always the 5-hour session
+window, so `(resets in 3h 5m)` tells you when this session's limit clears.
+
 Set `growth` to `context`, `usage`, or `cost` to key off one signal instead.
 
 Colors are applied per character: `%` and `*` become foliage, `,' ^ ; "` become

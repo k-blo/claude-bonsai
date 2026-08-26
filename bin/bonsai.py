@@ -215,8 +215,9 @@ def read_context(transcript_path, model_id):
 
 
 def read_usage(payload):
-    """Busiest rate-limit window as (fraction, resets_at)."""
+    """Busiest window as a fraction, plus when the session window resets."""
     limits = payload.get("rate_limits") or {}
+    session_reset = (limits.get("five_hour") or {}).get("resets_at")
     seen = []
     for key in ("five_hour", "seven_day"):
         win = limits.get(key) or {}
@@ -230,9 +231,8 @@ def read_usage(payload):
     if not seen:
         return None, None
     pct, resets = max(seen, key=lambda p: p[0])
-    if not resets:
-        # Busiest window gave no stamp; take one from any window.
-        resets = next((r for _, r in seen if r), None)
+    # Always report the session window, whichever window is busiest.
+    resets = session_reset or resets or next((r for _, r in seen if r), None)
     return max(0.0, min(1.0, pct / 100.0)), resets
 
 
