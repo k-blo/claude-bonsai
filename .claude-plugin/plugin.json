@@ -1,0 +1,21 @@
+{
+  "name": "claude-bonsai",
+  "description": "A colorful ASCII tree in your statusline that grows with context and usage",
+  "version": "0.1.0",
+  "author": {
+    "name": "Kevin Bloch"
+  },
+  "commands": [
+    "./commands/bonsai.md",
+    "./commands/bonsai-setup.md"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "bonsai",
+    "statusline",
+    "ascii",
+    "cbonsai",
+    "context",
+    "claude-code"
+  ]
+}

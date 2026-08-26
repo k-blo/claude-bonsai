@@ -1,0 +1,13 @@
+{
+  "name": "claude-bonsai",
+  "owner": {
+    "name": "Kevin Bloch"
+  },
+  "plugins": [
+    {
+      "name": "claude-bonsai",
+      "source": "./",
+      "description": "A colorful ASCII bonsai in your statusline that grows as context fills up"
+    }
+  ]
+}
