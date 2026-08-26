@@ -230,6 +230,9 @@ def read_usage(payload):
     if not seen:
         return None, None
     pct, resets = max(seen, key=lambda p: p[0])
+    if not resets:
+        # Busiest window gave no stamp; take one from any window.
+        resets = next((r for _, r in seen if r), None)
     return max(0.0, min(1.0, pct / 100.0)), resets
 
 
@@ -248,7 +251,11 @@ def until(resets_at):
         return "now"
     if mins < 60:
         return "%dm" % mins
-    return "%dh %dm" % divmod(mins, 60)
+    hours, mins = divmod(mins, 60)
+    if hours < 24:
+        return "%dh %dm" % (hours, mins)
+    days, hours = divmod(hours, 24)
+    return "%dd %dh" % (days, hours)
 
 
 def load_config(overrides=None):
