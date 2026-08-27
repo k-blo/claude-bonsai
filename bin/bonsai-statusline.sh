@@ -5,6 +5,10 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cfg_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 chain_file="$cfg_dir/bonsai-chain.sh"
+# With arguments (e.g. --status) this is a manual run: no hook JSON on stdin.
+if [ "$#" -gt 0 ]; then
+  exec python3 "$here/bonsai.py" "$@"
+fi
 input=$(cat)
 
 # Claude Code does not export COLUMNS; work it out for centring.

@@ -38,7 +38,7 @@ cfg_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 root=$(ls -d "$cfg_dir"/plugins/cache/*/claude-bonsai/*/ 2>/dev/null | sort -V |
   while read -r d; do [ -x "$d/bin/bonsai-statusline.sh" ] && echo "$d"; done | tail -1)
 [ -n "$root" ] || root=%(fallback)s
-exec "$root/bin/bonsai-statusline.sh"
+exec "$root/bin/bonsai-statusline.sh" "$@"
 """
 
 SAMPLE = {

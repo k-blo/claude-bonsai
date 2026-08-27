@@ -17,6 +17,11 @@ CONFIG_PATH = os.path.join(
     "bonsai-config.json",
 )
 
+USAGE_CACHE = os.path.join(
+    os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
+    "bonsai-usage.json",
+)
+
 DEFAULTS = {
     "cols": 0,
     "blossoms": True,
@@ -240,6 +245,53 @@ def read_usage(payload):
     return clamp(session), resets, clamp(max(weekly) if weekly else None)
 
 
+def cache_load():
+    """Last usage any session recorded: ((session, resets, weekly), age_mins)."""
+    try:
+        with open(USAGE_CACHE) as fh:
+            rec = json.load(fh)
+        age = int((_now() - float(rec.get("ts") or 0)) // 60)
+        return (rec.get("session"), rec.get("resets"), rec.get("weekly")), max(0, age)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return (None, None, None), 0
+
+
+def cache_save(reading):
+    """Shared so a terminal that has been idle can show another one's numbers."""
+    session, resets, weekly = reading
+    tmp = "%s.%d" % (USAGE_CACHE, os.getpid())
+    try:
+        with open(tmp, "w") as fh:
+            json.dump({"session": session, "resets": resets, "weekly": weekly,
+                       "ts": int(_now())}, fh)
+        os.replace(tmp, USAGE_CACHE)
+    except OSError:
+        pass
+
+
+def newer(mine, cached):
+    """The fresher of two readings.
+
+    A later reset stamp is a later 5-hour window; inside one window usage only
+    climbs, so the higher percentage is the newer read.
+    """
+    if mine[0] is None:
+        return cached
+    if cached[0] is None:
+        return mine
+    a, b = _as_utc(mine[1]), _as_utc(cached[1])
+    if a and b and abs((a - b).total_seconds()) > 60:
+        pick, other = (mine, cached) if a > b else (cached, mine)
+    else:
+        pick, other = (mine, cached) if mine[0] >= cached[0] else (cached, mine)
+    # The weekly window resets on its own clock; keep whatever we have.
+    return pick if pick[2] is not None else (pick[0], pick[1], other[2])
+
+
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).timestamp()
+
+
 def _as_utc(resets_at):
     """Reset stamp -> aware datetime, or None.
 
@@ -287,6 +339,12 @@ def until(resets_at):
     return "%dd %dh" % (days, hours)
 
 
+def ago(mins):
+    if mins < 60:
+        return "%dm ago" % mins
+    return "%dh %dm ago" % divmod(mins, 60)
+
+
 def load_config(overrides=None):
     cfg = dict(DEFAULTS)
     try:
@@ -322,6 +380,8 @@ def growth_from(cfg, session, weekly, cost_pct):
 def main():
     ap = argparse.ArgumentParser(description="Colorful ASCII tree for Claude Code.")
     ap.add_argument("--statusline", action="store_true", help="read hook JSON on stdin")
+    ap.add_argument("--status", action="store_true",
+                    help="print from the last usage any session saw; no stdin needed")
     ap.add_argument("--progress", type=float, help="growth 0..1, overrides live data")
     ap.add_argument("--stage", type=int, help="force a growth stage")
     ap.add_argument("--cols", type=int, help="centre within this width")
@@ -350,7 +410,13 @@ def main():
     model_id = ((payload.get("model") or {}).get("id")) or ""
     used, limit = read_context(payload.get("transcript_path"), model_id)
     ctx = used / limit if limit else 0.0
-    session, resets, weekly = read_usage(payload)
+    cached, age = cache_load()
+    mine = read_usage(payload)
+    picked = cached if args.status else newer(mine, cached)
+    if picked == mine and mine[0] is not None:
+        cache_save(mine)
+        age = 0
+    session, resets, weekly = picked
     cost = (payload.get("cost") or {}).get("total_cost_usd", 0.0) or 0.0
     cost_pct = min(1.0, cost / max(0.01, cfg["costFull"]))
 
@@ -367,22 +433,27 @@ def main():
     seed = cfg.get("seed") or payload.get("session_id") or "tree"
     lines = paint(STAGES[idx], cfg, pal, seed, color=args.color)
 
-    if cfg["showStats"] and args.statusline:
+    if cfg["showStats"] and (args.statusline or args.status):
         tint = hex_to_ansi(pal["new"][0]) if args.color else ""
         grey = hex_to_ansi(GREY) if args.color else ""
         end = RESET if args.color else ""
         # Kept in step: plain drives the padding, fancy carries the colours.
-        plain = ["%d%% ctx" % round(ctx * 100)]
+        plain = ["%d%% ctx" % round(ctx * 100)] if args.statusline else []
         fancy = list(plain)
         if session is not None:
             left = until(resets)
-            head = "%d%% use" % round(session * 100)
+            head = "%d%% session" % round(session * 100)
             tail = " (resets in %s)" % left if left else ""
             plain.append(head + tail)
             fancy.append(head + (grey + tail + tint if tail else ""))
         if weekly is not None:
             plain.append("weekly %d%%" % round(weekly * 100))
             fancy.append(plain[-1])
+        if args.status and session is not None:
+            plain.append(ago(age))
+            fancy.append(grey + plain[-1] + tint)
+        if not plain:
+            plain = fancy = ["no usage recorded yet"]
         # Line up with the tree above it.
         pad = cfg["indentChar"] * indent_for(cfg, len(" · ".join(plain)))
         lines.append("%s%s%s%s" % (pad, tint, " · ".join(fancy), end))

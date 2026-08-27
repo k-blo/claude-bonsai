@@ -1,6 +1,6 @@
 ---
 description: Print the ASCII tree, or change its settings
-argument-hint: "[palette <name>|stage <0-4>|growth <mode>|ground on|off|reset]"
+argument-hint: "[status|palette <name>|stage <0-4>|growth <mode>|ground on|off|reset]"
 allowed-tools: Bash, Read, Write
 ---
 
@@ -36,6 +36,7 @@ the tree in prose.
 | `blossoms on\|off` | Write `blossoms` |
 | `stats on\|off` | Write `showStats` |
 | `seed <text>` | Pin the coloring. `seed random` clears it back to per-session |
+| `status` | Print the tree sized by the newest usage any session recorded: `python3 "${CLAUDE_PLUGIN_ROOT}/bin/bonsai.py" --status`. Output verbatim |
 | `reset` | Delete the config file |
 
 After any config change, merge into the existing JSON (do not clobber other
