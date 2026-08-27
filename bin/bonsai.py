@@ -219,10 +219,14 @@ def read_usage(payload):
     limits = payload.get("rate_limits") or {}
     session_reset = (limits.get("five_hour") or {}).get("resets_at")
     seen = []
-    for key in ("five_hour", "seven_day"):
+    for key in ("five_hour", "seven_day", "seven_day_oauth_apps",
+                "seven_day_opus", "seven_day_sonnet"):
         win = limits.get(key) or {}
+        # The statusline payload names it used_percentage, the SDK utilization.
         pct = win.get("used_percentage")
-        if isinstance(pct, (int, float)):
+        if not isinstance(pct, (int, float)) or isinstance(pct, bool):
+            pct = win.get("utilization")
+        if isinstance(pct, (int, float)) and not isinstance(pct, bool):
             seen.append((pct, win.get("resets_at")))
     for entry in limits.get("model_scoped") or []:
         pct = (entry or {}).get("utilization")
@@ -236,16 +240,41 @@ def read_usage(payload):
     return max(0.0, min(1.0, pct / 100.0)), resets
 
 
-def until(resets_at):
-    """Formats an ISO reset stamp as 3h 6m."""
-    if not isinstance(resets_at, str) or not resets_at:
+def _as_utc(resets_at):
+    """Reset stamp -> aware datetime, or None.
+
+    (resets in 3h 6m) silently vanishing means this returned None. The
+    statusline payload sends Unix epoch SECONDS; the SDK/model_scoped shape
+    sends an ISO 8601 string. Both land here, so handle both.
+    """
+    if isinstance(resets_at, bool) or resets_at is None or resets_at == "":
         return None
+    if isinstance(resets_at, str):
+        try:
+            when = datetime.datetime.fromisoformat(resets_at.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                resets_at = float(resets_at)
+            except ValueError:
+                return None
+        else:
+            return when if when.tzinfo else when.replace(tzinfo=datetime.timezone.utc)
+    if not isinstance(resets_at, (int, float)):
+        return None
+    secs = float(resets_at)
+    if secs > 1e11:  # milliseconds
+        secs /= 1000.0
     try:
-        when = datetime.datetime.fromisoformat(resets_at.replace("Z", "+00:00"))
-    except ValueError:
+        return datetime.datetime.fromtimestamp(secs, datetime.timezone.utc)
+    except (OverflowError, OSError, ValueError):
         return None
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=datetime.timezone.utc)
+
+
+def until(resets_at):
+    """Formats a reset stamp as 3h 6m."""
+    when = _as_utc(resets_at)
+    if when is None:
+        return None
     mins = int((when - datetime.datetime.now(datetime.timezone.utc)).total_seconds() // 60)
     if mins <= 0:
         return "now"

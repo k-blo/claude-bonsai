@@ -46,10 +46,20 @@ Then, inside Claude Code:
 /bonsai-setup install
 ```
 
-That points `statusLine` at the plugin. If you already had a statusline, it is
-preserved and rendered underneath the tree, so nothing is lost.
+That points `statusLine` at `~/.claude/bonsai-statusline.sh`, a small shim that
+resolves the newest installed version at run time — `settings.json` cannot
+expand `${CLAUDE_PLUGIN_ROOT}`, so a literal path there would break on the next
+plugin update. If you already had a statusline, it is preserved and rendered
+underneath the tree, so nothing is lost.
 
-Remove it with `/bonsai-setup remove`.
+`/bonsai-setup status` shows what is wired up; `/bonsai-setup remove` undoes it
+and puts your old statusline back.
+
+If the tree does not appear, the statusline says why on one line
+(`bonsai: ...`) rather than rendering blank.
+
+Upgrading from 0.1.0: re-run `/bonsai-setup install` once — 0.1.0 wrote a
+version-pinned path into `settings.json` that the update leaves behind.
 
 ## Commands
 
