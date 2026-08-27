@@ -4,6 +4,10 @@ A colorful ASCII tree for the Claude Code statusline. It starts as a sapling and
 grows through five stages as your session fills up context and burns through
 your usage window.
 
+![The tree rendered in the Claude Code statusline](docs/statusline.png)
+
+Full-grown, it looks like this:
+
 ```
        %%%,%%%%%%%
        ,'%% \\-*%%%%%%%
