@@ -1,8 +1,7 @@
 # claude-bonsai
 
 A colorful ASCII tree for the Claude Code statusline. It starts as a sapling and
-grows through five stages as your session fills up context and burns through
-your usage window.
+grows through five stages as you burn through your usage limits.
 
 ![The tree rendered in the Claude Code statusline](docs/statusline.png)
 
@@ -18,7 +17,7 @@ Full-grown, it looks like this:
      *%    \/ #).-"*%%*
          _.) ,/ *%,
  _________/)#(_____________
-19% ctx · 61% use (resets in 3h 6m)
+19% ctx · 61% use (resets in 3h 6m) · weekly 23%
 ```
 
 ## Credit
@@ -68,7 +67,7 @@ version-pinned path into `settings.json` that the update leaves behind.
 | `/bonsai` | Print the full-grown tree |
 | `/bonsai palette autumn` | Switch palette: `verdant`, `autumn`, `sakura`, `mono` |
 | `/bonsai stage <0-4>` | Pin a stage instead of following the session |
-| `/bonsai growth <mode>` | Grow on `sum`, `context`, `usage`, or `cost` |
+| `/bonsai growth <mode>` | Grow on `max`, `avg`, `session`, `weekly`, or `cost` |
 | `/bonsai align left\|center` | Move the tree and stats line together |
 | `/bonsai ground on\|off` | Toggle the ground line |
 | `/bonsai stats on\|off` | Toggle the `19% ctx · 61% use` line |
@@ -81,18 +80,22 @@ Five hand-drawn stages, from a two-leaf sapling to the full tree. Every stage
 shares the same ground line and trunk column, so the tree grows in place instead
 of jumping around.
 
-Growth comes from **context + usage together**: 100% context plus 100%
-rate-limit usage is the largest tree, so each on its own gets you halfway.
+Growth comes from your **rate limits**: by default whichever of the 5-hour
+session window and the weekly window is fuller, so a full tree means you are at
+a limit. Context does not feed the tree.
 
-| Source | Read from |
+| Mode | Tree follows |
 |---|---|
-| Context | Last assistant message in the session transcript |
-| Usage | `rate_limits` on the statusline payload (5-hour, 7-day, per-model) |
+| `max` (default) | The higher of session and weekly |
+| `avg` | The mean of the two |
+| `session` | 5-hour window only |
+| `weekly` | 7-day windows only |
+| `cost` | Session dollars against `costFull` |
 
-The percentage is the busiest window; the countdown is always the 5-hour session
-window, so `(resets in 3h 5m)` tells you when this session's limit clears.
-
-Set `growth` to `context`, `usage`, or `cost` to key off one signal instead.
+Both come from `rate_limits` on the statusline payload: `61% use` is the 5-hour
+session window and `(resets in 3h 5m)` is when it clears; `weekly 23%` is the
+busiest 7-day window (including per-model ones). Context is still shown as
+`19% ctx`, read from the last assistant message in the transcript.
 
 Colors are applied per character: `%` and `*` become foliage, `,' ^ ; "` become
 lighter leaf edges, and `\ / | ( ) # _ - .` become wood. A small share of leaves
@@ -119,7 +122,7 @@ gets its own coloring and it stays stable across statusline refreshes.
 | `indentChar` | `"\u2800"` | Blank used for indentation; see note below |
 | `ground` | `true` | Draw the ground line |
 | `showStats` | `true` | Show the `19% ctx · 61% use` line |
-| `growth` | `"sum"` | `sum`, `context`, `usage`, or `cost` |
+| `growth` | `"max"` | `max`, `avg`, `session`, `weekly`, or `cost` |
 | `costFull` | `10.0` | Dollars that count as a full tree |
 | `curve` | `1.0` | Below 1 reaches the bigger stages sooner |
 | `stage` | `null` | Pin a stage `0`–`4`; `null` follows the session |

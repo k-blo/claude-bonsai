@@ -29,7 +29,7 @@ the tree in prose.
 |---|---|
 | `palette <name>` | Write `palette`. Valid: `verdant`, `autumn`, `sakura`, `mono` |
 | `stage <0-4>` | Write `stage` to pin one stage. `stage auto` clears it back to null |
-| `growth <mode>` | Write `growth`. Valid: `sum` (context+usage), `context`, `usage`, `cost` |
+| `growth <mode>` | Write `growth`. Valid: `max` (session or weekly, whichever is higher), `avg`, `session`, `weekly`, `cost` |
 | `cols <n>` | Write `cols`, the width the tree is centred in. `cols auto` sets `0` |
 | `align left\|center` | Write `align`; moves the tree and stats line together |
 | `ground on\|off` | Write `ground` |

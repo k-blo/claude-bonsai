@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Colorful ASCII tree, sized by Claude Code context and usage.
+"""Colorful ASCII tree, sized by Claude Code rate-limit usage.
 
 Full-grown tree by Joris Bellenger (b'ger), https://asciiart.website/art/3809
 Smaller growth stages drawn in the same style.
@@ -26,7 +26,7 @@ DEFAULTS = {
     "indentChar": "\u2800",
     "ground": True,
     "showStats": True,
-    "growth": "sum",
+    "growth": "max",
     "costFull": 10.0,
     "curve": 1.0,
     "seed": None,
@@ -118,6 +118,7 @@ EDGE = set(",';^\"")
 WOOD = set("\\/|()#_-.")
 
 RESET = "\033[0m"
+GREY = "#808080"
 
 
 def hex_to_ansi(color, bold=False):
@@ -214,30 +215,29 @@ def read_context(transcript_path, model_id):
     return 0, limit
 
 
+def _pct(win):
+    """Window -> percentage. Statusline calls it used_percentage, the SDK utilization."""
+    for key in ("used_percentage", "utilization"):
+        val = (win or {}).get(key)
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            return val
+    return None
+
+
 def read_usage(payload):
-    """Busiest window as a fraction, plus when the session window resets."""
+    """Session window as a fraction, when it resets, and the busiest weekly window."""
     limits = payload.get("rate_limits") or {}
-    session_reset = (limits.get("five_hour") or {}).get("resets_at")
-    seen = []
-    for key in ("five_hour", "seven_day", "seven_day_oauth_apps",
-                "seven_day_opus", "seven_day_sonnet"):
-        win = limits.get(key) or {}
-        # The statusline payload names it used_percentage, the SDK utilization.
-        pct = win.get("used_percentage")
-        if not isinstance(pct, (int, float)) or isinstance(pct, bool):
-            pct = win.get("utilization")
-        if isinstance(pct, (int, float)) and not isinstance(pct, bool):
-            seen.append((pct, win.get("resets_at")))
-    for entry in limits.get("model_scoped") or []:
-        pct = (entry or {}).get("utilization")
-        if isinstance(pct, (int, float)):
-            seen.append((pct, (entry or {}).get("resets_at")))
-    if not seen:
-        return None, None
-    pct, resets = max(seen, key=lambda p: p[0])
-    # Always report the session window, whichever window is busiest.
-    resets = session_reset or resets or next((r for _, r in seen if r), None)
-    return max(0.0, min(1.0, pct / 100.0)), resets
+    five = limits.get("five_hour") or {}
+    session = _pct(five)
+    weekly = [p for p in (_pct(limits.get(k)) for k in
+                          ("seven_day", "seven_day_oauth_apps",
+                           "seven_day_opus", "seven_day_sonnet")) if p is not None]
+    # The SDK shape puts the per-model weekly limits here instead.
+    weekly += [p for p in (_pct(e) for e in limits.get("model_scoped") or [])
+               if p is not None]
+    resets = five.get("resets_at")
+    clamp = lambda p: None if p is None else max(0.0, min(1.0, p / 100.0))
+    return clamp(session), resets, clamp(max(weekly) if weekly else None)
 
 
 def _as_utc(resets_at):
@@ -299,6 +299,26 @@ def load_config(overrides=None):
     return cfg
 
 
+GROWTH_MODES = ("max", "avg", "session", "weekly", "cost")
+
+
+def growth_from(cfg, session, weekly, cost_pct):
+    """How full the tree is: session limit, weekly limit, or a blend of both."""
+    mode = cfg["growth"] if cfg["growth"] in GROWTH_MODES else DEFAULTS["growth"]
+    if mode == "cost":
+        return cost_pct
+    if mode == "session":
+        picked = [session]
+    elif mode == "weekly":
+        picked = [weekly]
+    else:
+        picked = [session, weekly]
+    picked = [p for p in picked if p is not None]
+    if not picked:
+        return 0.0
+    return sum(picked) / len(picked) if mode == "avg" else max(picked)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Colorful ASCII tree for Claude Code.")
     ap.add_argument("--statusline", action="store_true", help="read hook JSON on stdin")
@@ -308,7 +328,7 @@ def main():
     ap.add_argument("--palette", choices=sorted(PALETTES))
     ap.add_argument("--seed")
     ap.add_argument("--curve", type=float)
-    ap.add_argument("--growth", choices=("sum", "context", "usage", "cost"))
+    ap.add_argument("--growth", choices=GROWTH_MODES)
     ap.add_argument("--align", choices=("center", "left"))
     ap.add_argument("--indentChar", help="character used for blank space")
     ap.add_argument("--no-ground", dest="ground", action="store_false", default=None)
@@ -330,21 +350,12 @@ def main():
     model_id = ((payload.get("model") or {}).get("id")) or ""
     used, limit = read_context(payload.get("transcript_path"), model_id)
     ctx = used / limit if limit else 0.0
-    use, resets = read_usage(payload)
+    session, resets, weekly = read_usage(payload)
     cost = (payload.get("cost") or {}).get("total_cost_usd", 0.0) or 0.0
     cost_pct = min(1.0, cost / max(0.01, cfg["costFull"]))
 
-    if args.progress is not None:
-        progress = args.progress
-    elif cfg["growth"] == "context":
-        progress = ctx
-    elif cfg["growth"] == "usage":
-        progress = use if use is not None else ctx
-    elif cfg["growth"] == "cost":
-        progress = cost_pct
-    else:
-        # Context + usage together: 100% + 100% is a full tree.
-        progress = (ctx + use) / 2 if use is not None else ctx
+    progress = (args.progress if args.progress is not None
+                else growth_from(cfg, session, weekly, cost_pct))
     progress = max(0.0, min(1.0, progress)) ** max(0.1, cfg["curve"])
 
     if cfg["stage"] is not None:
@@ -358,16 +369,23 @@ def main():
 
     if cfg["showStats"] and args.statusline:
         tint = hex_to_ansi(pal["new"][0]) if args.color else ""
+        grey = hex_to_ansi(GREY) if args.color else ""
         end = RESET if args.color else ""
-        parts = ["%d%% ctx" % round(ctx * 100)]
-        if use is not None:
+        # Kept in step: plain drives the padding, fancy carries the colours.
+        plain = ["%d%% ctx" % round(ctx * 100)]
+        fancy = list(plain)
+        if session is not None:
             left = until(resets)
-            parts.append("%d%% use%s" % (round(use * 100),
-                                         " (resets in %s)" % left if left else ""))
-        text = " · ".join(parts)
+            head = "%d%% use" % round(session * 100)
+            tail = " (resets in %s)" % left if left else ""
+            plain.append(head + tail)
+            fancy.append(head + (grey + tail + tint if tail else ""))
+        if weekly is not None:
+            plain.append("weekly %d%%" % round(weekly * 100))
+            fancy.append(plain[-1])
         # Line up with the tree above it.
-        pad = cfg["indentChar"] * indent_for(cfg, len(text))
-        lines.append("%s%s%s%s" % (pad, tint, text, end))
+        pad = cfg["indentChar"] * indent_for(cfg, len(" · ".join(plain)))
+        lines.append("%s%s%s%s" % (pad, tint, " · ".join(fancy), end))
 
     sys.stdout.write("\n".join(lines) + "\n")
 

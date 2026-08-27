@@ -7,7 +7,7 @@
     {
       "name": "claude-bonsai",
       "source": "./",
-      "description": "A colorful ASCII tree in your statusline that grows with context and usage"
+      "description": "A colorful ASCII tree in your statusline that grows with your rate-limit usage"
     }
   ]
 }
