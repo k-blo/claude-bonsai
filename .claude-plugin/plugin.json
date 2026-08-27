@@ -17,5 +17,7 @@
     "cbonsai",
     "context",
     "claude-code"
-  ]
+  ],
+  "homepage": "https://github.com/k-blo/claude-bonsai",
+  "repository": "https://github.com/k-blo/claude-bonsai"
 }

@@ -32,7 +32,7 @@ plugin only colors it and picks a stage.
 ## Install
 
 ```bash
-claude plugin marketplace add ~/reps/claude-bonsai
+claude plugin marketplace add k-blo/claude-bonsai
 claude plugin install claude-bonsai@claude-bonsai
 ```
 

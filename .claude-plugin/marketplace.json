@@ -6,8 +6,11 @@
   "plugins": [
     {
       "name": "claude-bonsai",
-      "source": "./",
-      "description": "A colorful ASCII bonsai in your statusline that grows as context fills up"
+      "source": {
+        "source": "github",
+        "repo": "k-blo/claude-bonsai"
+      },
+      "description": "A colorful ASCII tree in your statusline that grows with context and usage"
     }
   ]
 }
